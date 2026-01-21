@@ -1,0 +1,85 @@
+defaultDatasources:
+  victoriametrics:
+    datasources:
+      - name: VictoriaMetrics
+        type: prometheus
+        access: proxy
+        isDefault: false
+      - name: VictoriaMetrics (DS)
+        isDefault: false
+        access: proxy
+        type: victoriametrics-metrics-datasource
+        version: "0.15.1"
+  extra:
+    - name: VictoriaMetrics
+      type: prometheus
+      access: proxy
+      isDefault: true
+      url: https://victoriametrics.k8s-01.idi.nahui
+    - name: VictoriaMetrics (DS)
+      isDefault: false
+      access: proxy
+      type: victoriametrics-metrics-datasource
+      version: "0.15.1"
+      url: https://victoriametrics.k8s-01.idi.nahui
+vmsingle:
+  ingress:
+    enabled: true
+    annotations:
+      cert-manager.io/cluster-issuer: selfsigned-cluster-issuer
+    ingressClassName: nginx
+    hosts:
+      - victoriametrics.k8s-01.idi.nahui
+    tls:
+      - secretName: vm-tls
+        hosts:
+          - victoriametrics.k8s-01.idi.nahui
+alertmanager:
+  ingress:
+    enabled: true
+    annotations:
+      cert-manager.io/cluster-issuer: selfsigned-cluster-issuer
+    ingressClassName: nginx
+    hosts:
+      - alertmanager.k8s-01.idi.nahui
+    tls:
+      - secretName: alertmanager-tls
+        hosts:
+          - alertmanager.k8s-01.idi.nahui
+vmalert:
+  ingress:
+    enabled: true
+    annotations:
+      cert-manager.io/cluster-issuer: selfsigned-cluster-issuer
+    ingressClassName: nginx
+    hosts:
+      - vmalert.k8s-01.idi.nahui
+    tls:
+      - secretName: vmalert-tls
+        hosts:
+          - vmalert.k8s-01.idi.nahui
+vmagent:
+  ingress:
+    enabled: true
+    annotations:
+      cert-manager.io/cluster-issuer: selfsigned-cluster-issuer
+    ingressClassName: nginx
+    hosts:
+      - vmagent.k8s-01.idi.nahui
+    tls:
+      - secretName: vmagent-tls
+        hosts:
+          - vmagent.k8s-01.idi.nahui
+grafana:
+  ingress:
+    enabled: true
+    annotations:
+      cert-manager.io/cluster-issuer: selfsigned-cluster-issuer
+    ingressClassName: nginx
+    path: /
+    hosts:
+      - grafana.k8s-01.idi.nahui
+    tls:
+      - secretName: grafana-tls
+        hosts:
+          - grafana.k8s-01.idi.nahui

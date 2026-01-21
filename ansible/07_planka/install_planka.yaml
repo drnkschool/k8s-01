@@ -1,0 +1,84 @@
+- name: Install Planka with longhorn-slow StorageClass
+  hosts: k8s-01
+  become: yes
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  vars_files:
+    - ../vars/secrets.yml
+  tasks:
+    - name: Set longhorn-slow as default StorageClass
+      kubernetes.core.k8s:
+        api_version: storage.k8s.io/v1
+        kind: StorageClass
+        name: longhorn-slow
+        state: present
+        definition:
+          metadata:
+            annotations:
+              storageclass.kubernetes.io/is-default-class: "true"
+          provisioner: driver.longhorn.io
+          allowVolumeExpansion: true
+          reclaimPolicy: Delete
+          volumeBindingMode: Immediate
+          parameters:
+            numberOfReplicas: "3"
+            staleReplicaTimeout: "2880"
+            dataLocality: "disabled"
+
+    - name: Create planka namespace
+      kubernetes.core.k8s:
+        name: planka
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Check if Planka is already installed
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        namespace: planka
+      register: planka_check
+      ignore_errors: yes
+
+    - name: Copy Planka chart to remote host
+      ansible.builtin.copy:
+        src: ../charts/planka/
+        dest: /tmp/planka/
+        mode: '0755'
+
+    - name: Install Planka from local chart
+      kubernetes.core.helm:
+        name: planka
+        chart_ref: /tmp/planka
+        release_namespace: planka
+        values:
+          secretkey: "{{ planka_secretkey }}"
+          admin_email: "{{ planka_admin_email }}"
+          admin_password: "{{ planka_admin_password }}"
+          admin_name: "{{ planka_admin_name }}"
+          admin_username: "{{ planka_admin_username }}"
+          ingress:
+            enabled: true
+            className: "nginx"
+            hosts:
+              - host: planka.k8s-01.idi.nahui
+                paths:
+                  - path: /
+                    pathType: ImplementationSpecific
+          persistence:
+            data:
+              enabled: true
+              accessMode: ReadWriteOnce
+              size: 10Gi
+              mountPath: /storage
+          env:
+            OIDC_ISSUER: "https://auth.k8s-01.idi.nahui/application/o/planka/"
+            OIDC_CLIENT_ID: "{{ planka_oidc_client_id }}"
+            OIDC_CLIENT_SECRET: "{{ planka_oidc_client_secret }}"
+            OIDC_ENFORCED: "true"
+            NODE_TLS_REJECT_UNAUTHORIZED: "0"
+            OIDC_ADMIN_ROLES: planka_admin
+        create_namespace: true
+        wait: false
+      when: planka_check.resources | length == 0
+

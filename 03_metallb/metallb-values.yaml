@@ -1,0 +1,34 @@
+controller:
+  enabled: true
+  image:
+    repository: quay.io/metallb/controller
+  strategy:
+    type: RollingUpdate
+
+speaker:
+  enabled: true
+  memberlist:
+    enabled: true
+    mlBindPort: 7946
+    mlSecretKeyPath: "/etc/ml_secret_key"
+  excludeInterfaces:
+    enabled: true
+  image:
+    repository: quay.io/metallb/speaker
+  updateStrategy:
+    type: RollingUpdate
+  resources:
+  frr:
+    enabled: false
+
+crds:
+  enabled: true
+  validationFailurePolicy: Fail
+
+IPAddressPools:
+  annotations: {}
+  additionalLabels: {}
+  pools:
+  - name: default
+    addresses:
+    - 172.16.111.3 - 172.16.111.15

@@ -1,0 +1,68 @@
+- name: Install Nginx Ingress Controller
+  hosts: k8s-01
+  become: yes
+  tasks:
+    - name: Install Python packages via apt
+      ansible.builtin.apt:
+        name:
+          - python3-pip
+          - python3-setuptools
+          - python3-yaml
+        state: present
+        update_cache: yes
+
+    - name: Install kubernetes and jsonpatch via pip
+      ansible.builtin.pip:
+        name:
+          - kubernetes
+          - jsonpatch
+        state: present
+        break_system_packages: yes
+
+    - name: Check if Helm is installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/helm
+      register: helm_binary
+
+    - name: Download Helm installation script
+      ansible.builtin.get_url:
+        url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        dest: /tmp/get_helm.sh
+        mode: '0700'
+      when: not helm_binary.stat.exists
+
+    - name: Install Helm
+      ansible.builtin.shell: /tmp/get_helm.sh
+      when: not helm_binary.stat.exists
+
+    - name: Add Nginx Ingress Helm repository
+      kubernetes.core.helm_repository:
+        name: ingress-nginx
+        repo_url: https://kubernetes.github.io/ingress-nginx
+        kubeconfig: /etc/kubernetes/admin.conf
+
+    - name: Update Helm repositories
+      ansible.builtin.shell: helm repo update
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+    - name: Create ingress-nginx namespace
+      kubernetes.core.k8s:
+        name: ingress-nginx
+        api_version: v1
+        kind: Namespace
+        state: present
+        kubeconfig: /etc/kubernetes/admin.conf
+
+    - name: Install Nginx Ingress Controller with custom values
+      kubernetes.core.helm:
+        name: nginx-ingress
+        chart_ref: ingress-nginx/ingress-nginx
+        release_namespace: ingress-nginx
+        kubeconfig: /etc/kubernetes/admin.conf
+        values:
+          controller:
+            service:
+              type: LoadBalancer
+        wait: true
+        wait_timeout: 1m

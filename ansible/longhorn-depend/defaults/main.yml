@@ -1,0 +1,7 @@
+---
+longhorn_packages:
+  - open-iscsi
+  - nfs-common
+  - multipath-tools
+  - dmsetup
+  - cryptsetup

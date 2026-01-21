@@ -1,0 +1,31 @@
+namespace: "metallb-system"
+
+commonLabels: {}
+
+IPAddressPools:
+  annotations: {}
+  additionalLabels: {}
+  pools:
+  - name: default
+    addresses:
+    - 172.16.111.3 - 172.16.111.15
+
+BGPAdvertisements:
+  annotations: {}
+  additionalLabels: {}
+  advertisements:
+  - name: my-adv
+    additionalLabels: {}
+    ipAddressPools:  
+    - default
+
+BGPPeers:
+  annotations: {}
+  additionalLabels: {}
+  peers:
+  - name: my-peer
+    myASN: 228
+    peerASN: 1337
+    peerAddress: 172.16.250.1
+    bfdProfile: my-profile
+

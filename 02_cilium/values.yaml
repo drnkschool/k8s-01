@@ -1,0 +1,6 @@
+kubeProxyReplacement: "false"
+k8sServiceHost: "172.16.250.23"
+k8sServicePort: 6443
+operator:
+  enabled: true
+  replicas: 1

@@ -1,0 +1,9 @@
+- name: Запуск bash скрипта
+  hosts: k8s-01
+  become: yes
+  tasks:
+    - name: Запуск локального скрипта на удалённом хосте
+      ansible.builtin.script: ../scripts/test.sh
+      args:
+        chdir: /home/envy/k8s-01
+        executable: /bin/bash

@@ -1,0 +1,94 @@
+- name: Cleanup K8s installation
+  hosts: k8s-01
+  become: yes
+  tasks:
+    - name: Reset Kubernetes cluster
+      ansible.builtin.shell: kubeadm reset -f
+      ignore_errors: yes
+
+    - name: Stop and disable containerd service
+      ansible.builtin.systemd:
+        name: containerd
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+
+    - name: Remove Kubernetes packages
+      ansible.builtin.apt:
+        name:
+          - kubeadm
+          - kubectl
+          - kubelet
+        state: absent
+        purge: yes
+
+    - name: Remove containerd binaries
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /usr/local/bin/containerd
+        - /usr/local/bin/containerd-shim
+        - /usr/local/bin/containerd-shim-runc-v1
+        - /usr/local/bin/containerd-shim-runc-v2
+        - /usr/local/bin/containerd-stress
+        - /usr/local/bin/ctr
+
+    - name: Remove runc binary
+      ansible.builtin.file:
+        path: /usr/local/sbin/runc
+        state: absent
+
+    - name: Remove CNI plugins
+      ansible.builtin.file:
+        path: /opt/cni
+        state: absent
+
+    - name: Remove containerd systemd service
+      ansible.builtin.file:
+        path: /etc/systemd/system/containerd.service
+        state: absent
+
+    - name: Remove containerd configuration
+      ansible.builtin.file:
+        path: /etc/containerd
+        state: absent
+
+    - name: Remove crictl configuration
+      ansible.builtin.file:
+        path: /etc/crictl.yaml
+        state: absent
+
+    - name: Remove Kubernetes directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/kubernetes
+        - /var/lib/kubelet
+        - /var/lib/etcd
+        - /var/lib/cni
+
+    - name: Remove Kubernetes repository
+      ansible.builtin.file:
+        path: /etc/apt/sources.list.d/kubernetes.list
+        state: absent
+
+    - name: Remove Kubernetes GPG key
+      ansible.builtin.file:
+        path: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+        state: absent
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+
+    - name: Autoremove unused packages
+      ansible.builtin.apt:
+        autoremove: yes
+        purge: yes
+
