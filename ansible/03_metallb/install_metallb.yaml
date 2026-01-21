@@ -1,0 +1,60 @@
+---
+- name: Install MetalLB using Helm
+  hosts: k8s-01
+  become: yes
+  vars:
+    metallb_namespace: "metallb-system"
+    metallb_release_name: "metallb"
+    metallb_chart_name: "metallb/metallb"
+    kubeconfig_path: /etc/kubernetes/admin.conf
+  module_defaults:
+    group/kubernetes.core.k8s:
+      kubeconfig: "{{ kubeconfig_path }}"
+    kubernetes.core.helm:
+      kubeconfig: "{{ kubeconfig_path }}"
+  tasks:
+    - name: Copy config files Metallb
+      ansible.builtin.copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: "{{ item.mode | default('0644') }}"
+      loop:
+        - { src: './ipaddrpool.yaml', dest: '/tmp/ipaddrpool.yaml' }
+        - { src: './metallb-values.yaml', dest: '/tmp/metallb-values.yaml' }
+
+    - name: Check if kubeconfig exists
+      ansible.builtin.stat:
+        path: /etc/kubernetes/admin.conf
+    
+    - name: Add MetalLB Helm repository
+      kubernetes.core.helm_repository:
+        name: metallb
+        repo_url: "https://metallb.github.io/metallb"
+        state: present
+
+    - name: Create MetalLB namespace
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Namespace 
+        name: "{{ metallb_namespace }}"
+        state: present
+
+    - name: Update Helm repositories
+      ansible.builtin.shell: helm repo update
+      environment: 
+        KUBECONFIG: "{{ kubeconfig_path }}"
+
+    - name: Install/Upgrade MetalLB Helm chart
+      kubernetes.core.helm:
+        name: "{{ metallb_release_name }}"
+        chart_ref: "{{ metallb_chart_name }}"
+        release_namespace: "{{ metallb_namespace }}"
+        values_files:
+          - /tmp/metallb-values.yaml
+        state: present
+        update_repo_cache: true
+
+    - name: Create L2Advertisement and IPAddressPool entities  
+      kubernetes.core.k8s:
+        src: "/tmp/ipaddrpool.yaml"
+        state: present

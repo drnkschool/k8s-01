@@ -1,0 +1,30 @@
+authentik:
+  secret_key: "CVtHTB+y5T0CxEGtFxd4/X3a2F6K8Gr6B8wTGidMkkiZ8XrWU3iYP1L+u1aQtdmMy7yOGYyltc+VhWww"
+  error_reporting:
+    enabled: true
+  postgresql:
+    password: "8SEJHanpoJbePsoOkQNflvGbs5e1aG4ebdHBq8uCn9drM3l7xs"
+
+server:
+  ingress:
+    enabled: true
+    annotations:
+      cert-manager.io/cluster-issuer: selfsigned-cluster-issuer
+    ingressClassName: nginx
+    hosts:
+      - auth.k8s-01.idi.nahui
+    tls:
+      - secretName: authentik-tls
+        hosts:
+          - auth.k8s-01.idi.nahui
+
+postgresql:
+  enabled: true
+  auth:
+    password: "8SEJHanpoJbePsoOkQNflvGbs5e1aG4ebdHBq8uCn9drM3l7xs"
+
+persistence:
+  enabled: true
+  storageClass:
+  accessModes:
+    - ReadWriteOnce
