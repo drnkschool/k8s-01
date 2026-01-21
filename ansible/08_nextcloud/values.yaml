@@ -1,0 +1,47 @@
+nextcloud:
+  host: nextcloud.k8s-01.idi.nahui
+  trustedDomains:
+    - nextcloud.k8s-01.idi.nahui
+  username: admin
+  password: qwerty123
+persistence:
+  enabled: true
+mariadb:
+  enabled: true
+  auth:
+    database: nextcloud
+    username: nextcloud
+    password: qwerty123
+  primary:
+    persistence:
+      enabled: true
+postgresql:
+  enabled: false
+  global:
+    postgresql:
+      auth:
+        username: nextcloud
+        password: qwerty123
+        database: nextcloud
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "qwerty123"
+collabora:
+  enabled: true
+  collabora:
+    aliasgroups:
+      - host: https://nextcloud.k8s-01.idi.nahui:443
+    server_name: collabora.k8s-01.idi.nahui
+  password: qwerty123
+  username: admin  
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations: {}
+    hosts:
+      - host: collabora.k8s-01.idi.nahui
+        paths:
+          - path: /
+            pathType: ImplementationSpecific

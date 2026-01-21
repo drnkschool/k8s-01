@@ -1,0 +1,101 @@
+- name: Install Nextcloud
+  hosts: k8s-01
+  become: yes
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  vars_files:
+    - ../vars/secrets.yml
+  tasks:
+    - name: Add Nextcloud Helm repository
+      kubernetes.core.helm_repository:
+        name: nextcloud
+        repo_url: https://nextcloud.github.io/helm/
+
+    - name: Update Helm repositories
+      ansible.builtin.shell: helm repo update
+      changed_when: false
+
+    - name: Create nextcloud namespace
+      kubernetes.core.k8s:
+        name: nextcloud
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Check if Nextcloud is already installed
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        namespace: nextcloud
+      register: nextcloud_check
+      ignore_errors: yes
+
+    - name: Install Nextcloud with Longhorn storage
+      kubernetes.core.helm:
+        name: nextcloud
+        chart_ref: nextcloud/nextcloud
+        release_namespace: nextcloud
+        values:
+          nextcloud:
+            host: "{{ nextcloud_host }}"
+            trustedDomains:
+              - "{{ nextcloud_host }}"
+            username: "{{ nextcloud_admin_username }}"
+            password: "{{ nextcloud_admin_password }}"
+          ingress:
+            enabled: true
+            className: nginx
+            annotations:
+              nginx.ingress.kubernetes.io/proxy-body-size: "4G"
+            tls: []
+          persistence:
+            enabled: true
+            storageClass: longhorn-slow
+            accessMode: ReadWriteOnce
+            size: 50Gi
+          mariadb:
+            enabled: true
+            auth:
+              database: nextcloud
+              username: "{{ mariadb_username }}"
+              password: "{{ mariadb_password }}"
+              rootPassword: "{{ mariadb_root_password }}"
+            primary:
+              persistence:
+                enabled: true
+                storageClass: longhorn-slow
+                size: 10Gi
+          postgresql:
+            enabled: false
+          redis:
+            enabled: true
+            auth:
+              enabled: true
+              password: "{{ redis_password }}"
+            master:
+              persistence:
+                enabled: true
+                storageClass: longhorn-slow
+                size: 8Gi
+          collabora:
+            enabled: true
+            collabora:
+              aliasgroups:
+                - host: "http://{{ nextcloud_host }}"
+              server_name: "{{ collabora_host }}"
+            password: "{{ collabora_password }}"
+            username: "{{ collabora_username }}"
+            ingress:
+              enabled: true
+              className: nginx
+              annotations: {}
+              hosts:
+                - host: "{{ collabora_host }}"
+                  paths:
+                    - path: /
+                      pathType: ImplementationSpecific
+              tls: []
+        create_namespace: true
+        wait: false
+      when: nextcloud_check.resources | length == 0
+
