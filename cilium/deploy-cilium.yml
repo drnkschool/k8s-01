@@ -1,0 +1,69 @@
+- name: Deploy Cilium with Helm
+  hosts: k8s
+  become: true
+  gather_facts: false
+
+  vars:
+    cilium_namespace: cilium
+    cilium_release: cilium
+    cilium_chart_ref: cilium/cilium
+    cilium_chart_version: "1.15.0"   
+
+    cilium_values:
+          kubeProxyReplacement: "false"
+          k8sServiceHost: "172.16.250.23"
+          k8sServicePort: 6443
+          operator:
+              replicas: 1
+    
+
+  tasks:
+    - name: Add Cilium Helm repo
+      kubernetes.core.helm_repository:
+        name: cilium
+        repo_url: "https://helm.cilium.io"
+
+    - name: Update Helm repos
+      ansible.builtin.command: helm repo update
+      changed_when: false
+
+    - name: Ensure namespace exists
+      kubernetes.core.k8s:
+        kubeconfig: /etc/kubernetes/admin.conf
+        api_version: v1
+        kind: Namespace
+        name: "{{ cilium_namespace }}"
+        state: present
+
+    - name: Install/Upgrade Cilium
+      kubernetes.core.helm:
+        name: "{{ cilium_release }}"
+        chart_ref: "{{ cilium_chart_ref }}"
+        chart_version: "{{ cilium_chart_version }}"
+        release_namespace: "{{ cilium_namespace }}"
+        create_namespace: false
+        values: "{{ cilium_values }}"
+        wait: true
+        atomic: true
+        timeout: 10m
+        kubeconfig: /etc/kubernetes/admin.conf
+
+    
+
+    - name: Wait for Cilium DaemonSet rollout
+      ansible.builtin.command: >
+        kubectl --kubeconfig /etc/kubernetes/admin.conf
+        -n {{ cilium_namespace }} rollout status ds/cilium --timeout=10m
+      changed_when: false
+
+    - name: Wait for Operator rollout
+      ansible.builtin.command: >
+        kubectl --kubeconfig /etc/kubernetes/admin.conf
+        -n {{ cilium_namespace }} rollout status deploy/cilium-operator --timeout=10m
+      changed_when: false
+
+    - name: Show Cilium pods
+      ansible.builtin.command: >
+        kubectl --kubeconfig /etc/kubernetes/admin.conf
+        -n {{ cilium_namespace }} get pods -o wide
+      changed_when: false
