@@ -1,5 +1,0 @@
-- name: longhorn-depend
-  hosts: all
-  become: yes
-  roles:
-    - longhorn-depend
