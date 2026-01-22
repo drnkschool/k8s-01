@@ -5,10 +5,10 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m
-  path: ./authenik/flux
+  path: ./cluster/authentik/flux
   prune: true
   wait: true
-  timeout: 5m
+  timeout: 10m
   sourceRef:
     kind: GitRepository
-    name: k8s-01
+    name: flux-system
