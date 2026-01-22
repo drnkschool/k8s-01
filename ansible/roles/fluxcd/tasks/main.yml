@@ -1,0 +1,57 @@
+---
+- name: Include OS family debug
+  ansible.builtin.debug:
+    msg: "Семейство ОС хоста {{ inventory_hostname }} : {{ ansible_facts.os_family }}"
+  tags:
+    - debug
+    - always
+
+- name: Include Debian installation tasks
+  ansible.builtin.include_tasks: install_debian.yml
+  when: ansible_facts['os_family'] == "Debian"
+  tags:
+    - install
+    - debian
+
+- name: Include Darwin installation tasks
+  ansible.builtin.include_tasks: install_darwin.yml
+  when: ansible_facts['os_family'] == "Darwin"
+  tags:
+    - install
+    - darwin
+
+- name: Verify flux CLI installation
+  ansible.builtin.command: "flux --version"
+  register: flux_version_check
+  changed_when: false
+  failed_when: flux_version_check.rc != 0
+  tags:
+    - verify
+    - always
+
+- name: Display flux version
+  ansible.builtin.debug:
+    msg: "Flux version: {{ flux_version_check.stdout }}"
+  when: flux_version_check.rc == 0
+  tags:
+    - verify
+    - always
+
+- name: Bootstrap Flux CD to GitHub repository
+  ansible.builtin.shell:
+    cmd: |
+      flux bootstrap github \
+        --{{ flux_bootstrap_method }} \
+        --owner={{ flux_github_owner }} \
+        --repository={{ flux_github_repository }} \
+        --branch={{ flux_github_branch }} \
+        --path={{ flux_github_path }}
+  environment:
+    GITHUB_TOKEN: "{{ github_token }}"
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  when:
+    - github_token is defined
+    - github_token | length > 0
+  tags:
+    - bootstrap
+    - github

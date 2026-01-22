@@ -1,0 +1,17 @@
+---
+- name: Download flux install script
+  ansible.builtin.get_url:
+    url: "{{ flux_install_script_url }}"
+    dest: "{{ flux_install_script_path }}"
+    mode: '0755'
+  tags:
+    - install
+    - debian
+
+- name: Run flux install script
+  ansible.builtin.command: "bash {{ flux_install_script_path }}"
+  args:
+    chdir: "/tmp"
+  tags:
+    - install
+    - debian

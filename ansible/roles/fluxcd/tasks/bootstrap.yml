@@ -1,0 +1,37 @@
+---
+- name: Check if already bootstrapped
+  ansible.builtin.command: |
+    kubectl get ns flux-system
+  register: flux_system_check
+  changed_when: false
+  failed_when: false
+  tags:
+    - bootstrap
+
+- name: Bootstrap Flux CD
+  ansible.builtin.shell:
+    cmd: |
+      flux bootstrap github \
+        --{{ flux_bootstrap_method }} \
+        --owner={{ flux_github_owner }} \
+        --repository={{ flux_github_repository }} \
+        --branch={{ flux_github_branch }} \
+        --path={{ flux_github_path }} \
+        --personal={{ flux_github_personal | default(true) | bool }}
+  environment:
+    GITHUB_TOKEN: "{{ github_token }}"
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  when:
+    - flux_system_check.rc != 0
+    - github_token is defined
+    - github_token | length > 0
+  register: bootstrap_result
+  tags:
+    - bootstrap
+
+- name: Skip bootstrap (already configured)
+  ansible.builtin.debug:
+    msg: "Flux уже настроен в кластере. Пропускаем bootstrap."
+  when: flux_system_check.rc == 0
+  tags:
+    - bootstrap

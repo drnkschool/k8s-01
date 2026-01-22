@@ -1,0 +1,70 @@
+---
+- name: Check if kubeconfig exists
+  ansible.builtin.stat:
+    path: "{{ kubeconfig_path }}"
+  register: kubeconfig_stat
+  failed_when: not kubeconfig_stat.stat.exists
+
+- name: Add MetalLB Helm repository
+  kubernetes.core.helm_repository:
+    name: metallb
+    repo_url: "https://metallb.github.io/metallb"
+    state: present
+  when: kubeconfig_stat.stat.exists
+
+- name: Create MetalLB namespace
+  kubernetes.core.k8s:
+    api_version: v1
+    kind: Namespace
+    name: "{{ metallb_namespace }}"
+    state: present
+  when: kubeconfig_stat.stat.exists
+
+- name: Update Helm repositories
+  ansible.builtin.shell: helm repo update
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  when: kubeconfig_stat.stat.exists
+
+- name: Install/Upgrade MetalLB Helm chart
+  kubernetes.core.helm:
+    name: "{{ metallb_release_name }}"
+    chart_ref: "{{ metallb_chart_name }}"
+    release_namespace: "{{ metallb_namespace }}"
+    values:
+      # Конфигурация из вашего metallb-values.yaml
+      speaker:
+        nodeSelector:
+          node-role.kubernetes.io/control-plane: ""
+      controller:
+        nodeSelector:
+          node-role.kubernetes.io/control-plane: ""
+    state: present
+    update_repo_cache: true
+  when: kubeconfig_stat.stat.exists
+
+- name: Create IPAddressPool
+  kubernetes.core.k8s:
+    api_version: metallb.io/v1beta1
+    kind: IPAddressPool
+    name: default-pool
+    namespace: "{{ metallb_namespace }}"
+    state: present
+    definition:
+      spec:
+        addresses:
+          - 192.168.1.240-192.168.1.250  # Замените на ваш диапазон IP
+  when: kubeconfig_stat.stat.exists
+
+- name: Create L2Advertisement
+  kubernetes.core.k8s:
+    api_version: metallb.io/v1beta1
+    kind: L2Advertisement
+    name: default-advertisement
+    namespace: "{{ metallb_namespace }}"
+    state: present
+    definition:
+      spec:
+        ipAddressPools:
+          - default-pool
+  when: kubeconfig_stat.stat.exists

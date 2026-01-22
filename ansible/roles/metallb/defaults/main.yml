@@ -1,0 +1,5 @@
+---
+metallb_namespace: "metallb-system"
+metallb_release_name: "metallb"
+metallb_chart_name: "metallb/metallb"
+kubeconfig_path: "/etc/kubernetes/admin.conf"

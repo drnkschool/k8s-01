@@ -1,0 +1,9 @@
+---
+- name: Install and configure FluxCD
+  hosts: kubernetes_masters
+  become: true
+  vars_files:
+    - vars/secrets.yml
+  roles:
+    - role: fluxcd
+      tags: fluxcd

@@ -1,0 +1,12 @@
+---
+flux_version: "latest"
+flux_install_script_url: "https://fluxcd.io/install.sh"
+flux_install_script_path: "/tmp/flux-install.sh"
+
+flux_github_owner: "drnkschool"
+flux_github_repository: "k8s-01"
+flux_github_branch: "main"
+flux_github_path: "cluster"
+flux_bootstrap_method: "token-auth"  
+
+kubeconfig_path: "/etc/kubernetes/admin.conf"

@@ -1,0 +1,20 @@
+---
+galaxy_info:
+  author: "Ваше Имя"
+  description: "Роль для установки FluxCD и настройки bootstrap"
+  license: "MIT"
+  min_ansible_version: "2.9"
+  platforms:
+    - name: Debian
+      versions:
+        - all
+    - name: Darwin
+      versions:
+        - all
+  galaxy_tags:
+    - kubernetes
+    - gitops
+    - fluxcd
+    - ci-cd
+
+dependencies: []
