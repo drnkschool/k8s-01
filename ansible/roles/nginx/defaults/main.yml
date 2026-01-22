@@ -1,0 +1,21 @@
+---
+# Nginx Ingress configuration
+nginx_ingress_namespace: "ingress-nginx"
+nginx_ingress_repo_name: "ingress-nginx"
+nginx_ingress_repo_url: "https://kubernetes.github.io/ingress-nginx"
+nginx_ingress_release_name: "nginx-ingress"
+nginx_ingress_chart_ref: "ingress-nginx/ingress-nginx"
+
+# Service configuration
+nginx_ingress_service_type: "LoadBalancer"
+
+# Controller configuration
+nginx_ingress_replicas: 2
+
+# Resource requests
+nginx_ingress_cpu_request: "100m"
+nginx_ingress_memory_request: "256Mi"
+
+# Wait timeout
+nginx_ingress_wait_timeout: "5m"
+

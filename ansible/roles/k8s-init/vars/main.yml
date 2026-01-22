@@ -1,0 +1,7 @@
+---
+k8s_repo_key_url: "https://pkgs.k8s.io/core:/stable:/{{ k8s_version }}/deb/Release.key"
+k8s_repo_url: "https://pkgs.k8s.io/core:/stable:/{{ k8s_version }}/deb/"
+containerd_url: "https://github.com/containerd/containerd/releases/download/{{ containerd_version }}/containerd-{{ containerd_version }}-linux-amd64.tar.gz"
+runc_url: "https://github.com/opencontainers/runc/releases/download/{{ runc_version }}/runc.amd64"
+cni_url: "https://github.com/containernetworking/plugins/releases/download/{{ cni_plugins_version }}/cni-plugins-linux-amd64-{{ cni_plugins_version }}.tgz"
+

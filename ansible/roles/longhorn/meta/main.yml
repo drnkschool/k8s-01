@@ -1,0 +1,18 @@
+---
+galaxy_info:
+  author: your.name
+  description: Install Longhorn distributed block storage
+  company: your.company
+  license: MIT
+  min_ansible_version: 2.10
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+  galaxy_tags:
+    - kubernetes
+    - longhorn
+    - storage
+dependencies: []
+

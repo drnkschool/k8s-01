@@ -1,0 +1,104 @@
+---
+- name: Remove old kubernetes repository if exists
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/kubernetes.list
+    state: absent
+
+- name: Install dependencies
+  ansible.builtin.apt:
+    name:
+      - curl
+      - gpg
+      - wget
+    state: present
+    update_cache: yes
+
+- name: Create directory for keyrings
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Check if GPG key exists
+  ansible.builtin.stat:
+    path: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+  register: gpg_key
+
+- name: Download and install GPG key
+  ansible.builtin.shell: |
+    curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+  when: not gpg_key.stat.exists
+
+- name: Set permissions on GPG key
+  ansible.builtin.file:
+    path: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+    mode: '0644'
+  when: not gpg_key.stat.exists
+
+- name: Add Kubernetes repository
+  ansible.builtin.shell: |
+    echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' | tee /etc/apt/sources.list.d/kubernetes.list
+  args:
+    creates: /etc/apt/sources.list.d/kubernetes.list
+
+- name: Set permissions on repo list
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/kubernetes.list
+    mode: '0644'
+
+- name: Install Kubernetes packages
+  ansible.builtin.apt:
+    name:
+      - kubeadm
+      - kubectl
+      - kubelet
+    state: present
+    update_cache: yes
+
+- name: Install containerd and dependencies
+  include_tasks: containerd.yml
+
+- name: Reload systemd and start containerd
+  ansible.builtin.systemd:
+    daemon_reload: yes
+    name: containerd
+    enabled: yes
+    state: started
+
+- name: Create crictl config
+  ansible.builtin.copy:
+    dest: /etc/crictl.yaml
+    content: |
+      runtime-endpoint: unix:///var/run/containerd/containerd.sock
+
+- name: Enable IP forwarding
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    state: present
+    sysctl_set: yes
+    reload: yes
+
+- name: Check if Kubernetes is initialized
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  register: k8s_initialized
+
+- name: Initialize Kubernetes
+  ansible.builtin.shell: kubeadm init --pod-network-cidr=10.0.0.0/16
+  when: not k8s_initialized.stat.exists
+  register: kubeadm_output
+
+- name: Set KUBECONFIG in environment
+  ansible.builtin.lineinfile:
+    path: /etc/environment
+    line: 'export KUBECONFIG=/etc/kubernetes/admin.conf'
+    create: yes
+
+- name: Remove taint from control-plane
+  ansible.builtin.shell: kubectl taint nodes --all node-role.kubernetes.io/control-plane-
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: not k8s_initialized.stat.exists
+  ignore_errors: yes
+

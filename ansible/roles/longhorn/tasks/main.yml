@@ -1,0 +1,112 @@
+---
+- name: Install required packages
+  ansible.builtin.apt:
+    name:
+      - open-iscsi
+      - nfs-common
+      - jq
+    state: present
+    update_cache: yes
+
+- name: Create data directory
+  ansible.builtin.file:
+    path: "{{ longhorn_data_path }}"
+    state: directory
+    mode: '0755'
+
+- name: Check if Longhorn is already installed
+  ansible.builtin.shell: |
+    helm list -n {{ longhorn_namespace }} -o json 2>/dev/null | jq -r '.[].name' | grep -q "^{{ longhorn_release_name }}$"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: longhorn_check
+  ignore_errors: yes
+  changed_when: false
+  failed_when: false
+
+- name: Add Longhorn Helm repository
+  kubernetes.core.helm_repository:
+    name: "{{ longhorn_repo_name }}"
+    repo_url: "{{ longhorn_repo_url }}"
+    kubeconfig: /etc/kubernetes/admin.conf
+
+- name: Update Helm repositories
+  ansible.builtin.shell: helm repo update
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Create longhorn-system namespace
+  kubernetes.core.k8s:
+    name: "{{ longhorn_namespace }}"
+    api_version: v1
+    kind: Namespace
+    state: present
+    kubeconfig: /etc/kubernetes/admin.conf
+
+- name: Install Longhorn with custom values
+  kubernetes.core.helm:
+    name: "{{ longhorn_release_name }}"
+    chart_ref: "{{ longhorn_chart_ref }}"
+    release_namespace: "{{ longhorn_namespace }}"
+    kubeconfig: /etc/kubernetes/admin.conf
+    values:
+      defaultSettings:
+        defaultDataPath: "{{ longhorn_data_path }}"
+      persistence:
+        defaultClass: "{{ longhorn_default_class | bool }}"
+    wait: false
+  when: longhorn_check.rc != 0
+
+- name: Wait for Longhorn to be ready
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    namespace: "{{ longhorn_namespace }}"
+    label_selectors:
+      - app.kubernetes.io/name=longhorn-manager
+  register: longhorn_deployments
+  retries: 30
+  delay: 10
+  until: longhorn_deployments.resources | length > 0
+  when: longhorn_check.rc != 0
+
+- name: Create custom StorageClass for slow storage
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: /etc/kubernetes/admin.conf
+    definition:
+      apiVersion: storage.k8s.io/v1
+      kind: StorageClass
+      metadata:
+        name: "{{ longhorn_slow_storageclass }}"
+      provisioner: driver.longhorn.io
+      allowVolumeExpansion: true
+      reclaimPolicy: Delete
+      volumeBindingMode: Immediate
+      parameters:
+        numberOfReplicas: "{{ longhorn_replicas | quote }}"
+        staleReplicaTimeout: "{{ longhorn_stale_timeout | quote }}"
+        fromBackup: ""
+        fsType: "ext4"
+        dataLocality: "disabled"
+
+- name: Set longhorn-slow as default StorageClass
+  kubernetes.core.k8s:
+    api_version: storage.k8s.io/v1
+    kind: StorageClass
+    name: "{{ longhorn_slow_storageclass }}"
+    state: present
+    kubeconfig: /etc/kubernetes/admin.conf
+    definition:
+      metadata:
+        annotations:
+          storageclass.kubernetes.io/is-default-class: "true"
+      provisioner: driver.longhorn.io
+      allowVolumeExpansion: true
+      reclaimPolicy: Delete
+      volumeBindingMode: Immediate
+      parameters:
+        numberOfReplicas: "{{ longhorn_replicas | quote }}"
+        staleReplicaTimeout: "{{ longhorn_stale_timeout | quote }}"
+        dataLocality: "disabled"
+

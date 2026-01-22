@@ -1,0 +1,55 @@
+---
+- name: Add Jetstack Helm repository
+  kubernetes.core.helm_repository:
+    name: "{{ certmanager_repo_name }}"
+    repo_url: "{{ certmanager_repo_url }}"
+
+- name: Update Helm repositories
+  ansible.builtin.shell: helm repo update
+  changed_when: false
+
+- name: Create cert-manager namespace
+  kubernetes.core.k8s:
+    name: "{{ certmanager_namespace }}"
+    api_version: v1
+    kind: Namespace
+    state: present
+
+- name: Check if cert-manager is already installed
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ certmanager_deployment_name }}"
+    namespace: "{{ certmanager_namespace }}"
+  register: certmanager_check
+  ignore_errors: yes
+
+- name: Install cert-manager
+  kubernetes.core.helm:
+    name: "{{ certmanager_release_name }}"
+    chart_ref: "{{ certmanager_chart_ref }}"
+    release_namespace: "{{ certmanager_namespace }}"
+    values:
+      installCRDs: "{{ certmanager_install_crds | bool }}"
+      replicaCount: "{{ certmanager_replicas | default(1) }}"
+      resources:
+        requests:
+          cpu: "{{ certmanager_cpu_request | default('100m') }}"
+          memory: "{{ certmanager_memory_request | default('256Mi') }}"
+    wait: "{{ certmanager_wait | bool }}"
+    wait_timeout: "{{ certmanager_wait_timeout | default('5m') }}"
+  when: certmanager_check.resources | length == 0
+
+- name: Wait for cert-manager to be ready
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    namespace: "{{ certmanager_namespace }}"
+    label_selectors:
+      - app.kubernetes.io/name=cert-manager
+  register: certmanager_deployments
+  retries: 30
+  delay: 10
+  until: certmanager_deployments.resources | length > 0 and (certmanager_deployments.resources[0].status.readyReplicas or 0) > 0
+  when: certmanager_check.resources | length == 0
+

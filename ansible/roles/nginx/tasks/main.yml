@@ -1,0 +1,100 @@
+---
+- name: Install Python packages via apt
+  ansible.builtin.apt:
+    name:
+      - python3-pip
+      - python3-setuptools
+      - python3-yaml
+    state: present
+    update_cache: yes
+
+- name: Install kubernetes and jsonpatch via pip
+  ansible.builtin.pip:
+    name:
+      - kubernetes
+      - jsonpatch
+    state: present
+    break_system_packages: yes
+
+- name: Check if Helm is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/helm
+  register: helm_binary
+
+- name: Download Helm installation script
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+    dest: /tmp/get_helm.sh
+    mode: '0700'
+  when: not helm_binary.stat.exists
+
+- name: Install Helm
+  ansible.builtin.shell: /tmp/get_helm.sh
+  when: not helm_binary.stat.exists
+
+- name: Cleanup Helm installation script
+  ansible.builtin.file:
+    path: /tmp/get_helm.sh
+    state: absent
+  when: not helm_binary.stat.exists
+
+- name: Check if Nginx Ingress is already installed
+  ansible.builtin.shell: |
+    helm list -n {{ nginx_ingress_namespace }} -o json 2>/dev/null | jq -r '.[].name' | grep -q "^{{ nginx_ingress_release_name }}$"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: nginx_check
+  ignore_errors: yes
+  changed_when: false
+  failed_when: false
+
+- name: Add Nginx Ingress Helm repository
+  kubernetes.core.helm_repository:
+    name: "{{ nginx_ingress_repo_name }}"
+    repo_url: "{{ nginx_ingress_repo_url }}"
+    kubeconfig: /etc/kubernetes/admin.conf
+
+- name: Update Helm repositories
+  ansible.builtin.shell: helm repo update
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Create ingress-nginx namespace
+  kubernetes.core.k8s:
+    name: "{{ nginx_ingress_namespace }}"
+    api_version: v1
+    kind: Namespace
+    state: present
+    kubeconfig: /etc/kubernetes/admin.conf
+
+- name: Install Nginx Ingress Controller with custom values
+  kubernetes.core.helm:
+    name: "{{ nginx_ingress_release_name }}"
+    chart_ref: "{{ nginx_ingress_chart_ref }}"
+    release_namespace: "{{ nginx_ingress_namespace }}"
+    kubeconfig: /etc/kubernetes/admin.conf
+    values:
+      controller:
+        service:
+          type: "{{ nginx_ingress_service_type }}"
+        replicaCount: "{{ nginx_ingress_replicas | default(2) }}"
+        resources:
+          requests:
+            cpu: "{{ nginx_ingress_cpu_request | default('100m') }}"
+            memory: "{{ nginx_ingress_memory_request | default('256Mi') }}"
+    wait: true
+    wait_timeout: "{{ nginx_ingress_wait_timeout | default('5m') }}"
+  when: nginx_check.rc != 0
+
+- name: Wait for Nginx Ingress to be ready
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    namespace: "{{ nginx_ingress_namespace }}"
+    label_selectors:
+      - app.kubernetes.io/name=ingress-ngress
+  register: nginx_deployments
+  retries: 30
+  delay: 10
+  until: nginx_deployments.resources | length > 0 and (nginx_deployments.resources[0].status.readyReplicas or 0) > 0
+
