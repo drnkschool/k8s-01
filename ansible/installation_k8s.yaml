@@ -1,0 +1,16 @@
+---
+- name: Install cert-manager
+  hosts: k8s-01
+  become: yes
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+    K8S_AUTH_KUBECONFIG: /etc/kubernetes/admin.conf
+  roles:
+    - k8s-init
+    - longhorn
+    - nginx
+    - metallb
+    - cilium
+    - cert-manager
+    - fluxcd
+    
