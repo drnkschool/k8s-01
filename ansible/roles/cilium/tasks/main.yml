@@ -1,0 +1,36 @@
+- name: Verify kubeconfig exists on localhost
+  ansible.builtin.stat:
+    path: "{{ kubeconfig }}"
+  delegate_to: localhost
+  run_once: true
+  register: kubeconfig_stat
+
+- name: Fail if kubeconfig is missing
+  ansible.builtin.fail:
+    msg: "kubeconfig not found at {{ kubeconfig }} (role cilium runs from localhost)"
+  when: not kubeconfig_stat.stat.exists
+  delegate_to: localhost
+  run_once: true
+
+- name: Add Cilium Helm repo
+  kubernetes.core.helm_repository:
+    name: "{{ cilium_helm_repo_name }}"
+    repo_url: "{{ cilium_helm_repo_url }}"
+  delegate_to: localhost
+  run_once: true
+
+- name: Install/Upgrade Cilium
+  kubernetes.core.helm:
+    kubeconfig: "{{ kubeconfig }}"
+    name: "{{ cilium_release_name }}"
+    chart_ref: "{{ cilium_chart_ref }}"
+    chart_version: "{{ (cilium_chart_version | length) > 0 | ternary(cilium_chart_version, omit) }}"
+    release_namespace: "{{ cilium_namespace }}"
+    create_namespace: false
+    values_files:
+      - "{{ cilium_values_file }}"
+    wait: "{{ cilium_wait }}"
+    timeout: "{{ cilium_timeout }}"
+    atomic: true
+  delegate_to: localhost
+  run_once: true

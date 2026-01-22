@@ -1,0 +1,20 @@
+# kubeconfig на твоём Mac
+kubeconfig: "{{ lookup('env','HOME') + '/.kube/config' }}"
+
+# где ставим Cilium
+cilium_namespace: kube-system
+
+# repo + chart
+cilium_helm_repo_name: cilium
+cilium_helm_repo_url: https://helm.cilium.io/
+cilium_release_name: cilium
+cilium_chart_ref: cilium/cilium
+
+cilium_chart_version: "1.15.0"
+
+# values файл роли
+cilium_values_file: "{{ role_path }}/files/cilium-values.yaml"
+
+# ждать готовности
+cilium_wait: true
+cilium_timeout: 10m
