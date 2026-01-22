@@ -8,7 +8,7 @@ spec:
 
   chart:
     spec:
-      chart: ./authentik/chart
+      chart: ./claster/authentik/chart
       sourceRef:
         kind: GitRepository
         name: flux-system
