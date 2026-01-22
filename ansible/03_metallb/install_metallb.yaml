@@ -1,6 +1,6 @@
 ---
 - name: Install MetalLB using Helm
-  hosts: k8s-01
+  hosts: local
   become: yes
   vars:
     metallb_namespace: "metallb-system"
@@ -13,15 +13,6 @@
     kubernetes.core.helm:
       kubeconfig: "{{ kubeconfig_path }}"
   tasks:
-    - name: Copy config files Metallb
-      ansible.builtin.copy:
-        src: "{{ item.src }}"
-        dest: "{{ item.dest }}"
-        mode: "{{ item.mode | default('0644') }}"
-      loop:
-        - { src: './ipaddrpool.yaml', dest: '/tmp/ipaddrpool.yaml' }
-        - { src: './metallb-values.yaml', dest: '/tmp/metallb-values.yaml' }
-
     - name: Check if kubeconfig exists
       ansible.builtin.stat:
         path: /etc/kubernetes/admin.conf
@@ -50,11 +41,11 @@
         chart_ref: "{{ metallb_chart_name }}"
         release_namespace: "{{ metallb_namespace }}"
         values_files:
-          - /tmp/metallb-values.yaml
+          - metallb-values.yaml
         state: present
         update_repo_cache: true
 
     - name: Create L2Advertisement and IPAddressPool entities  
       kubernetes.core.k8s:
-        src: "/tmp/ipaddrpool.yaml"
+        src: "ipaddrpool.yaml"
         state: present
