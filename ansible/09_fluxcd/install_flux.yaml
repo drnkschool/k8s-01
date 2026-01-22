@@ -1,0 +1,70 @@
+---
+- name: Install FluxCD with GitHub token
+  hosts: k8s-01
+  become: yes
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  vars_files:
+    - ../vars/secrets.yml
+  tasks:
+    - name: Download flux install script
+      ansible.builtin.get_url:
+        url: https://fluxcd.io/install.sh
+        dest: /tmp/flux-install.sh
+        mode: '0755'
+    
+    - name: Run flux install script
+      ansible.builtin.shell: sudo bash /tmp/flux-install.sh
+      args:
+        chdir: /tmp
+
+    - name: Create flux-system namespace
+      kubernetes.core.k8s:
+        name: "{{ flux_namespace }}"
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Check if Flux is already bootstrapped
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        namespace: "{{ flux_namespace }}"
+        label_selectors:
+          - "app.kubernetes.io/part-of=flux"
+      register: flux_deployments
+
+    - name: Skip bootstrap if Flux already installed
+      ansible.builtin.debug:
+        msg: "FluxCD already bootstrapped ({{ flux_deployments.resources | length }} deployments found)"
+      when: flux_deployments.resources | length > 0
+
+    - name: Bootstrap FluxCD with GitHub token
+      ansible.builtin.shell: |
+        flux bootstrap github \
+          --token-auth \
+          --owner={{ flux_owner }} \
+          --repository={{ flux_repository }} \
+          --branch={{ flux_branch }} \
+          --path={{ flux_path }} \
+          --components-extra=image-reflector-controller,image-automation-controller
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+        GITHUB_TOKEN: "{{ github_token }}"
+      register: flux_bootstrap
+      when: flux_deployments.resources | length == 0
+
+    - name: Verify Flux installation
+      ansible.builtin.shell: flux check --pre
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: flux_check
+      changed_when: false
+
+    - name: Show final status
+      ansible.builtin.debug:
+        msg: |
+          Flux Status: {{ 'OK' if 'All checks passed' in flux_check.stdout else 'FAILED' }}
+          Git repo: github.com/{{ flux_owner }}/{{ flux_repository }}
+          Path: {{ flux_path }}
+

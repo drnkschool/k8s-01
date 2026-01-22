@@ -1,0 +1,5 @@
+creation_rules:
+  - path_regex: .*.yaml
+    encrypted_regex: ^(data|stringData|secretkey|password|admin_password|OIDC_CLIENT_SECRET)$
+    age: age1rrglzh2xs8g6l4rldvs54qkeec3eug4kmpxd4fyct6j3swf6f9ts7e6slm
+
