@@ -1,0 +1,8 @@
+---
+- name: Install Flux CLI
+  hosts: local
+  become: true
+  vars_files:
+    - ../vars/secrets.yml
+  roles:
+    - flux

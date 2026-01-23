@@ -1,57 +1,44 @@
 ---
-- name: Include OS family debug
-  ansible.builtin.debug:
+- name: Display OS family
+  debug:
     msg: "Семейство ОС хоста {{ inventory_hostname }} : {{ ansible_facts.os_family }}"
-  tags:
-    - debug
-    - always
 
-- name: Include Debian installation tasks
-  ansible.builtin.include_tasks: install_debian.yml
+- name: Download flux install script for Debian
+  ansible.builtin.get_url:
+    url: https://fluxcd.io/install.sh
+    dest: /tmp/flux-install.sh
+    mode: '0755'
   when: ansible_facts['os_family'] == "Debian"
-  tags:
-    - install
-    - debian
 
-- name: Include Darwin installation tasks
-  ansible.builtin.include_tasks: install_darwin.yml
+- name: Run flux install script for Debian
+  ansible.builtin.shell: sudo bash /tmp/flux-install.sh
+  args:
+    chdir: /tmp
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Tap fluxcd repository for macOS
+  community.general.homebrew_tap:
+    name: fluxcd/tap
+    state: present
+  become: no
   when: ansible_facts['os_family'] == "Darwin"
-  tags:
-    - install
-    - darwin
 
-- name: Verify flux CLI installation
-  ansible.builtin.command: "flux --version"
-  register: flux_version_check
-  changed_when: false
-  failed_when: flux_version_check.rc != 0
-  tags:
-    - verify
-    - always
-
-- name: Display flux version
-  ansible.builtin.debug:
-    msg: "Flux version: {{ flux_version_check.stdout }}"
-  when: flux_version_check.rc == 0
-  tags:
-    - verify
-    - always
+- name: Install flux CLI for macOS
+  community.general.homebrew:
+    name: fluxcd/tap/flux
+    state: latest
+  become: no
+  when: ansible_facts['os_family'] == "Darwin"
 
 - name: Bootstrap Flux CD to GitHub repository
   ansible.builtin.shell:
     cmd: |
       flux bootstrap github \
-        --{{ flux_bootstrap_method }} \
-        --owner={{ flux_github_owner }} \
-        --repository={{ flux_github_repository }} \
-        --branch={{ flux_github_branch }} \
-        --path={{ flux_github_path }}
+        --token-auth \
+        --owner=drnkschool \
+        --repository=k8s-01 \
+        --branch=main \
+        --path=cluster \
   environment:
     GITHUB_TOKEN: "{{ github_token }}"
-    KUBECONFIG: "{{ kubeconfig_path }}"
-  when:
-    - github_token is defined
-    - github_token | length > 0
-  tags:
-    - bootstrap
-    - github
+    KUBECONFIG: /etc/kubernetes/admin.conf
