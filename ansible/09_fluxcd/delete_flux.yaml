@@ -1,0 +1,111 @@
+---
+- name: Complete FluxCD Cleanup
+  hosts: k8s-01
+  become: yes
+  gather_facts: no
+  vars:
+    kubeconfig: /etc/kubernetes/admin.conf
+  
+  tasks:
+    - name: Remove Flux components (Helm)
+      kubernetes.core.helm:
+        name: flux
+        release_namespace: flux-system
+        state: absent
+        kubeconfig: "{{ kubeconfig }}"
+      ignore_errors: yes
+
+    - name: Delete flux-system namespace
+      kubernetes.core.k8s:
+        name: flux-system
+        api_version: v1
+        kind: Namespace
+        state: absent
+        kubeconfig: "{{ kubeconfig }}"
+      ignore_errors: yes
+
+    - name: Delete all Flux Custom Resources
+      kubernetes.core.k8s:
+        api_version: "{{ item.api_version }}"
+        kind: "{{ item.kind }}"
+        namespace: "{{ item.namespace | default('flux-system') }}"
+        state: absent
+        kubeconfig: "{{ kubeconfig }}"
+      loop:
+        - { api_version: "source.toolkit.fluxcd.io/v1beta3", kind: "GitRepository" }
+        - { api_version: "kustomize.toolkit.fluxcd.io/v1beta2", kind: "Kustomization" }
+        - { api_version: "helm.toolkit.fluxcd.io/v2beta1", kind: "HelmRelease" }
+        - { api_version: "helm.toolkit.fluxcd.io/v2beta1", kind: "HelmRepository" }
+        - { api_version: "image.toolkit.fluxcd.io/v1beta2", kind: "ImagePolicy" }
+        - { api_version: "image.toolkit.fluxcd.io/v1beta2", kind: "ImageRepository" }
+        - { api_version: "notification.toolkit.fluxcd.io/v1beta3", kind: "Receiver" }
+        - { api_version: "notification.toolkit.fluxcd.io/v1beta3", kind: "Provider" }
+        - { api_version: "notification.toolkit.fluxcd.io/v1beta3", kind: "Alert" }
+      ignore_errors: yes
+
+    - name: Force delete flux-system namespace if stuck
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Namespace
+        name: flux-system
+        state: absent
+        force: yes
+        kubeconfig: "{{ kubeconfig }}"
+      ignore_errors: yes
+
+    - name: Remove Flux CRDs
+      kubernetes.core.k8s:
+        api_version: apiextensions.k8s.io/v1
+        kind: CustomResourceDefinition
+        name: "{{ item.metadata.name }}"
+        state: absent
+        kubeconfig: "{{ kubeconfig }}"
+      loop:
+        - { metadata: { name: "gitrepositories.source.toolkit.fluxcd.io" } }
+        - { metadata: { name: "kustomizations.kustomize.toolkit.fluxcd.io" } }
+        - { metadata: { name: "helmreleases.helm.toolkit.fluxcd.io" } }
+        - { metadata: { name: "helmrepositories.helm.toolkit.fluxcd.io" } }
+        - { metadata: { name: "imagepolicies.image.toolkit.fluxcd.io" } }
+        - { metadata: { name: "imagerepositories.image.toolkit.fluxcd.io" } }
+        - { metadata: { name: "receivers.notification.toolkit.fluxcd.io" } }
+        - { metadata: { name: "providers.notification.toolkit.fluxcd.io" } }
+        - { metadata: { name: "alerts.notification.toolkit.fluxcd.io" } }
+      ignore_errors: yes
+
+    - name: Remove GitHub deploy keys from repository
+      ansible.builtin.uri:
+        url: "https://api.github.com/repos/drnkschool/k8s-01/deployments_keys"
+        method: GET
+        headers:
+          Authorization: "token {{ github_token }}"
+          Accept: "application/vnd.github.v3+json"
+      register: deploy_keys
+      delegate_to: localhost
+      ignore_errors: yes
+
+    - name: Delete Flux deploy keys from GitHub
+      ansible.builtin.uri:
+        url: "https://api.github.com/repos/drnkschool/k8s-01/deployments_keys/{{ item.id }}"
+        method: DELETE
+        headers:
+          Authorization: "token {{ github_token }}"
+          Accept: "application/vnd.github.v3+json"
+      loop: "{{ deploy_keys.json }}"
+      when: deploy_keys.json | length > 0
+      delegate_to: localhost
+      ignore_errors: yes
+
+    - name: Remove Flux CLI (optional)
+      ansible.builtin.shell: flux uninstall --silent
+      ignore_errors: yes
+
+    - name: Verify Flux cleanup
+      ansible.builtin.shell: |
+        kubectl get pods -n flux-system 2>/dev/null || echo "Namespace gone"
+      register: flux_check
+      failed_when: false
+
+    - name: Show cleanup status
+      ansible.builtin.debug:
+        msg: "FluxCD cleanup completed. Status: {{ flux_check.stdout }}"
+

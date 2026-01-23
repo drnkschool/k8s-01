@@ -30,6 +30,10 @@
   become: no
   when: ansible_facts['os_family'] == "Darwin"
 
+- name: Include FluxCD secrets
+  include_vars:
+    file: vars/secrets.yml
+
 - name: Bootstrap Flux CD to GitHub repository
   ansible.builtin.shell:
     cmd: |

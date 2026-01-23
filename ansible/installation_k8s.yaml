@@ -5,6 +5,7 @@
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
     K8S_AUTH_KUBECONFIG: /etc/kubernetes/admin.conf
+    GITHUB_TOKEN: 
   roles:
     - k8s-init
     - cilium
