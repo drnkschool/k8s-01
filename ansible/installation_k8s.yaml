@@ -7,10 +7,10 @@
     K8S_AUTH_KUBECONFIG: /etc/kubernetes/admin.conf
   roles:
     - k8s-init
-    - longhorn
-    - nginx
-    - metallb
     - cilium
+    - metallb
+    - nginx
+    - longhorn
     - cert-manager
     - fluxcd
     

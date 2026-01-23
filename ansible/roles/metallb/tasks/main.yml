@@ -32,7 +32,6 @@
     chart_ref: "{{ metallb_chart_name }}"
     release_namespace: "{{ metallb_namespace }}"
     values:
-      # Конфигурация из вашего metallb-values.yaml
       speaker:
         nodeSelector:
           node-role.kubernetes.io/control-plane: ""
@@ -42,29 +41,47 @@
     state: present
     update_repo_cache: true
   when: kubeconfig_stat.stat.exists
+  timeout: 600
 
-- name: Create IPAddressPool
-  kubernetes.core.k8s:
-    api_version: metallb.io/v1beta1
-    kind: IPAddressPool
-    name: default-pool
+- name: Wait for ALL MetalLB pods to be ready
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
     namespace: "{{ metallb_namespace }}"
-    state: present
-    definition:
-      spec:
-        addresses:
-          - 192.168.1.240-192.168.1.250  # Замените на ваш диапазон IP
+  register: metallb_pods
+  retries: 60
+  delay: 10
+  until: 
+    - metallb_pods.resources | length > 0
+    - metallb_pods.resources | selectattr('status.phase', 'equalto', 'Running') | list | length == metallb_pods.resources | length
+    - metallb_pods.resources | selectattr('status.conditions', 'defined') | 
+      selectattr('status.conditions', 'defined') | 
+      map(attribute='status.conditions') | 
+      flatten | 
+      selectattr('type', 'equalto', 'Ready') | 
+      selectattr('status', 'equalto', 'True') | list | length == metallb_pods.resources | length
   when: kubeconfig_stat.stat.exists
 
-- name: Create L2Advertisement
+- name: Create IPAddressPool and L2Advertisement INLINE
   kubernetes.core.k8s:
-    api_version: metallb.io/v1beta1
-    kind: L2Advertisement
-    name: default-advertisement
-    namespace: "{{ metallb_namespace }}"
     state: present
+    kubeconfig: "{{ kubeconfig_path }}"
     definition:
-      spec:
-        ipAddressPools:
-          - default-pool
+      - apiVersion: metallb.io/v1beta1
+        kind: IPAddressPool
+        metadata:
+          name: default
+          namespace: "{{ metallb_namespace }}"
+        spec:
+          addresses:
+          - 172.16.111.3-172.16.111.15
+      - apiVersion: metallb.io/v1beta1
+        kind: L2Advertisement
+        metadata:
+          name: default
+          namespace: "{{ metallb_namespace }}"
+        spec:
+          ipAddressPools:
+          - default
   when: kubeconfig_stat.stat.exists
+

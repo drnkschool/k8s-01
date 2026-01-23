@@ -10,7 +10,7 @@ nginx_ingress_chart_ref: "ingress-nginx/ingress-nginx"
 nginx_ingress_service_type: "LoadBalancer"
 
 # Controller configuration
-nginx_ingress_replicas: 2
+nginx_ingress_replicas: 1
 
 # Resource requests
 nginx_ingress_cpu_request: "100m"

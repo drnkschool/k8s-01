@@ -8,5 +8,6 @@ flux_github_repository: "k8s-01"
 flux_github_branch: "main"
 flux_github_path: "cluster"
 flux_bootstrap_method: "token-auth"  
+github_token: "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"
 
 kubeconfig_path: "/etc/kubernetes/admin.conf"

@@ -2,4 +2,5 @@
 localhost ansible_connection=local
 
 [k8s-01]
-172.16.250.23
+172.16.250.23 
+
