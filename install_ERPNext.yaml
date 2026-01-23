@@ -1,0 +1,315 @@
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: erpnext
+
+---
+# MariaDB PV
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: erpnext-mariadb-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /mnt/erpnext/mariadb
+
+---
+# MariaDB PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mariadb-pvc
+  namespace: erpnext
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# MariaDB Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mariadb
+  namespace: erpnext
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mariadb
+  template:
+    metadata:
+      labels:
+        app: mariadb
+    spec:
+      containers:
+      - name: mariadb
+        image: mariadb:10.11
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: "rootpass123"
+        - name: MYSQL_DATABASE
+          value: "erpnext"
+        - name: MYSQL_USER
+          value: "erpnext"
+        - name: MYSQL_PASSWORD
+          value: "erpnextpass"
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - name: mariadb-storage
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: mariadb-storage
+        persistentVolumeClaim:
+          claimName: mariadb-pvc
+
+---
+# MariaDB Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb
+  namespace: erpnext
+spec:
+  selector:
+    app: mariadb
+  ports:
+  - port: 3306
+    targetPort: 3306
+
+---
+# Redis PV
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: erpnext-redis-pv
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /mnt/erpnext/redis
+
+---
+# Redis PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: erpnext
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+# Redis Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: erpnext
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+        volumeMounts:
+        - name: redis-storage
+          mountPath: /data
+      volumes:
+      - name: redis-storage
+        persistentVolumeClaim:
+          claimName: redis-pvc
+
+---
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: erpnext
+spec:
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: erpnext-backend
+  namespace: erpnext
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: erpnext-backend
+  template:
+    metadata:
+      labels:
+        app: erpnext-backend
+    spec:
+      initContainers:
+      - name: init-sites
+        image: frappe/erpnext:v15
+        command: ["/bin/bash", "-c"]
+        args:
+        - "mkdir -p /home/frappe/frappe-bench/sites && chmod 777 /home/frappe/frappe-bench/sites"
+        volumeMounts:
+        - name: sites-storage
+          mountPath: /home/frappe/frappe-bench/sites
+      containers:
+      - name: backend
+        image: python:3.11-slim  # ✅ СУЩЕСТВУЕТ!
+        workingDir: /home/frappe
+        command: ["/bin/bash"]
+        args:
+        - -c
+        - |
+          apt-get update && apt-get install -y git wget
+          pip install frappe-bench
+          bench init frappe-bench --frappe-branch version-15 --verbose
+          cd frappe-bench
+          bench get-app erpnext https://github.com/frappe/erpnext --branch version-15
+          bench new-site site1.localhost \
+            --db-root-password rootpass123 \
+            --admin-password admin123 \
+            --db-name erpnext \
+            --db-password erpnextpass \
+            --install-app erpnext
+          bench set-config -g db_host mariadb
+          bench set-config -g redis_cache redis:6379
+          bench set-config -g redis_queue redis:6379
+          bench set-config -g socketio_port 9000
+          bench start
+        env:
+        - name: DB_HOST
+          value: "mariadb"
+        - name: MYSQL_ROOT_PASSWORD
+          value: "rootpass123"
+        - name: MYSQL_DATABASE
+          value: "erpnext"
+        - name: MYSQL_USER
+          value: "erpnext"
+        - name: MYSQL_PASSWORD
+          value: "erpnextpass"
+        ports:
+        - containerPort: 8000
+        - containerPort: 9000
+        volumeMounts:
+        - name: sites-storage
+          mountPath: /home/frappe/frappe-bench/sites
+      volumes:
+      - name: sites-storage
+        hostPath:
+          path: /mnt/erpnext/sites
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: erpnext-backend
+  namespace: erpnext
+spec:
+  selector:
+    app: erpnext-backend
+  type: NodePort
+  ports:
+  - port: 8000
+    targetPort: 8000
+    nodePort: 30090
+
+---
+# NGINX ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: erpnext-nginx
+  namespace: erpnext
+data:
+  default.conf: |
+    server {
+      listen 80;
+      location / {
+        proxy_pass http://erpnext-backend:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+        proxy_connect_timeout 120s;
+      }
+    }
+
+---
+# ERPNext Frontend NGINX
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: erpnext-frontend
+  namespace: erpnext
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: erpnext-frontend
+  template:
+    metadata:
+      labels:
+        app: erpnext-frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: nginx-conf
+          mountPath: /etc/nginx/conf.d
+      volumes:
+      - name: nginx-conf
+        configMap:
+          name: erpnext-nginx
+
+---
+# Главный Service (NodePort 30089)
+apiVersion: v1
+kind: Service
+metadata:
+  name: erpnext
+  namespace: erpnext
+spec:
+  selector:
+    app: erpnext-frontend
+  type: NodePort
+  ports:
+  - port: 80
+    targetPort: 80
+    nodePort: 30089
+
